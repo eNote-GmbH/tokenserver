@@ -426,10 +426,7 @@ def return_token(request):
         if generation == 0 and keys_changed_at > user['generation']:
             updates['generation'] = keys_changed_at
         updates['keys_changed_at'] = keys_changed_at
-    if client_state != user['client_state']:
-        # Don't revert from some-client-state to no-client-state.
-        if not client_state:
-            raise _invalid_client_state(request, 'empty string')
+    if client_state and client_state != user['client_state']:
         # Don't revert to a previous client-state.
         if client_state in user['old_client_states']:
             raise _invalid_client_state(request, 'stale value')
