@@ -130,7 +130,9 @@ def valid_authorization(request, **kwargs):
     elif name.lower() == 'bearer':
         _validate_oauth_token(request, token)
     else:
-        request.metrics['cause'] = 'unsupported authorization type: %s' % name.lower()
+        request.metrics['cause'] = (
+            'unsupported authorization type: %s' % name.lower()
+        )
         resp = _unauthorized(description='Unsupported')
         resp.www_authenticate = ('BrowserID', {})
         raise resp
@@ -330,64 +332,9 @@ VALIDATORS = (
 )
 
 
-@token.get(validators=VALIDATORS)
-def return_token(request):
-    """This service does the following process:
-
-    - validates the BrowserID or OAuth credentials provided in the
-      Authorization header
-    - allocates when necessary a node to the user for the required service
-    - checks generation number, key-rotation timestamp and x-client-state
-      header for consistency
-    - returns a JSON mapping containing the following values:
-
-        - **id** -- a signed authorization token, containing the
-          user's id for hthe application and the node.
-        - **secret** -- a secret derived from the shared secret
-        - **uid** -- the user id for this service
-        - **api_endpoint** -- the root URL for the user for the service.
-    """
-    # at this stage, we are sure that the credentials, application and version
-    # number were valid, so let's build the authentication token and return it.
-    backend = request.registry.getUtility(INodeAssignment)
-    settings = request.registry.settings
-    email = request.validated['authorization']['email']
-
-    # The `generation` and `keys_changed_at` fields are both optional.
-    try:
-        idp_claims = request.validated['authorization']['idpClaims']
-    except KeyError:
-        generation = 0
-        keys_changed_at = 0
-    else:
-        generation = idp_claims.get('fxa-generation', 0)
-        if not isinstance(generation, (int, long)):
-            request.metrics['cause'] = 'invalid FxA client state generation'
-            raise _unauthorized("invalid-generation")
-        keys_changed_at = idp_claims.get('fxa-keysChangedAt', 0)
-        if not isinstance(keys_changed_at, (int, long)):
-            request.metrics['cause'] = 'invalid FxA credentials (key change timestamp)'
-            raise _unauthorized("invalid-credentials",
-                                description="invalid keysChangedAt")
-
-    application = request.validated['application']
-    version = request.validated['version']
-    pattern = request.validated['pattern']
-    service = get_service_name(application, version)
-    client_state = request.validated['client-state']
-
-    with metrics_timer('tokenserver.backend.get_user', request):
-        user = backend.get_user(service, email)
-    if not user:
-        allowed = settings.get('tokenserver.allow_new_users', True)
-        if not allowed:
-            request.metrics['cause'] = 'new users not allowed'
-            raise _unauthorized('new-users-disabled')
-        with metrics_timer('tokenserver.backend.allocate_user', request):
-            user = backend.allocate_user(service, email, generation,
-                                         client_state,
-                                         keys_changed_at=keys_changed_at)
-
+def validate_client_state(
+    request, user, backend, service, client_state, generation, keys_changed_at
+):
     # We now perform an elaborate set of consistency checks on the
     # provided claims, which we expect to behave as follows:
     #
@@ -463,6 +410,76 @@ def return_token(request):
             request.metrics['cause'] = 'invalid user key change timestamp'
             raise _unauthorized("invalid-keysChangedAt")
 
+
+@token.get(validators=VALIDATORS)
+def return_token(request):
+    """This service does the following process:
+
+    - validates the BrowserID or OAuth credentials provided in the
+      Authorization header
+    - allocates when necessary a node to the user for the required service
+    - checks generation number, key-rotation timestamp and x-client-state
+      header for consistency
+    - returns a JSON mapping containing the following values:
+
+        - **id** -- a signed authorization token, containing the
+          user's id for hthe application and the node.
+        - **secret** -- a secret derived from the shared secret
+        - **uid** -- the user id for this service
+        - **api_endpoint** -- the root URL for the user for the service.
+    """
+    # at this stage, we are sure that the credentials, application and version
+    # number were valid, so let's build the authentication token and return it.
+    backend = request.registry.getUtility(INodeAssignment)
+    settings = request.registry.settings
+    email = request.validated['authorization']['email']
+
+    # The `generation` and `keys_changed_at` fields are both optional.
+    try:
+        idp_claims = request.validated['authorization']['idpClaims']
+    except KeyError:
+        generation = 0
+        keys_changed_at = 0
+    else:
+        generation = idp_claims.get('fxa-generation', 0)
+        if not isinstance(generation, (int, long)):
+            msg = 'invalid FxA client state generation'
+            request.metrics['cause'] = msg
+            raise _unauthorized("invalid-generation")
+        keys_changed_at = idp_claims.get('fxa-keysChangedAt', 0)
+        if not isinstance(keys_changed_at, (int, long)):
+            msg = 'invalid FxA credentials (key change timestamp)'
+            request.metrics['cause'] = msg
+            raise _unauthorized("invalid-credentials",
+                                description="invalid keysChangedAt")
+
+    application = request.validated['application']
+    version = request.validated['version']
+    pattern = request.validated['pattern']
+    service = get_service_name(application, version)
+    client_state = request.validated['client-state']
+
+    with metrics_timer('tokenserver.backend.get_user', request):
+        user = backend.get_user(service, email)
+    if not user:
+        allowed = settings.get('tokenserver.allow_new_users', True)
+        if not allowed:
+            request.metrics['cause'] = 'new users not allowed'
+            raise _unauthorized('new-users-disabled')
+        with metrics_timer('tokenserver.backend.allocate_user', request):
+            user = backend.allocate_user(service, email, generation,
+                                         client_state,
+                                         keys_changed_at=keys_changed_at)
+
+    use_xkeyid = settings.get('tokenserver.needs_xkeyid', True)
+    if client_state or use_xkeyid:
+        validate_client_state(
+            request, user, backend, service, client_state, generation,
+            keys_changed_at
+        )
+    else:
+        request.metrics['notice'] = 'Accept client without client-state'
+
     secrets = settings['tokenserver.secrets']
     node_secrets = secrets.get(user['node'])
     if not node_secrets:
@@ -487,14 +504,23 @@ def return_token(request):
         'node': user['node'],
         'expires': int(time.time()) + token_duration,
         'fxa_uid': request.validated['fxa_uid'],
-        'fxa_kid': format_key_id(
-            # Follow FxA behaviour of using generation as a fallback.
-            user['keys_changed_at'] or user['generation'],
-            client_state.decode('hex')
-        ),
         'hashed_fxa_uid': request.validated['hashed_fxa_uid'],
         'hashed_device_id': request.validated['hashed_device_id']
     }
+
+    if client_state or use_xkeyid:
+        token_data['fxa_kid'] = format_key_id(
+            # Follow FxA behaviour of using generation as a fallback.
+            user['keys_changed_at'] or user['generation'],
+            client_state.decode('hex')
+        )
+    else:
+        token_data['fxa_kid'] = format_key_id(
+            # Follow FxA behaviour of using generation as a fallback.
+            user['keys_changed_at'] or user['generation'],
+            b'\0' * 16
+        )
+
     token = tokenlib.make_token(token_data, secret=secret)
     secret = tokenlib.get_derived_secret(token, secret=secret)
 

@@ -31,62 +31,15 @@ from tokenlib.utils import decode_token_bytes
 here = os.path.dirname(__file__)
 
 
-class TestService(unittest.TestCase):
-
+class TestServiceTemplate(unittest.TestCase):
     def get_ini(self):
         return os.path.join(os.path.dirname(__file__),
                             'test_memorynode.ini')
-
-    def setUp(self):
-        self.config = testing.setUp()
-        settings = {}
-        load_into_settings(self.get_ini(), settings)
-        self.config.add_settings(settings)
-        self.config.include("tokenserver")
-        load_and_register("tokenserver", self.config)
-        self.backend = self.config.registry.getUtility(INodeAssignment)
-        wsgiapp = self.config.make_wsgi_app()
-        self.app = TestApp(wsgiapp)
-        # Mock out the verifier to return successfully by default.
-        self.mock_browserid_verifier_context = self.mock_browserid_verifier()
-        self.mock_browserid_verifier_context.__enter__()
-        self.mock_oauth_verifier_context = self.mock_oauth_verifier()
-        self.mock_oauth_verifier_context.__enter__()
-        self.logs = LogCapture()
 
     def tearDown(self):
         self.logs.uninstall()
         self.mock_oauth_verifier_context.__exit__(None, None, None)
         self.mock_browserid_verifier_context.__exit__(None, None, None)
-
-    def assertExceptionWasLogged(self, msg):
-        for r in self.logs.records:
-            if r.msg == msg:
-                assert r.exc_info is not None
-                break
-        else:
-            assert False, "exception with message %r was not logged" % (msg,)
-
-    def assertMessageWasNotLogged(self, msg):
-        for r in self.logs.records:
-            if r.msg == msg:
-                assert False, "message %r was unexpectedly logged" % (msg,)
-
-    def assertMetricWasLogged(self, key):
-        """Check that a metric was logged during the request."""
-        for r in self.logs.records:
-            if key in r.__dict__:
-                break
-        else:
-            assert False, "metric %r was not logged" % (key,)
-
-    def clearLogs(self):
-        del self.logs.records[:]
-
-    def unsafelyParseToken(self, token):
-        # For testing purposes, don't check HMAC or anything...
-        token = token.encode("utf8")
-        return json.loads(decode_token_bytes(token)[:-32].decode("utf8"))
 
     @contextlib.contextmanager
     def mock_browserid_verifier(self, response=None, exc=None):
@@ -137,8 +90,56 @@ class TestService(unittest.TestCase):
         kw.setdefault('audience', 'http://tokenserver.services.mozilla.com')
         return make_assertion(**kw).encode('ascii')
 
+    def assertExceptionWasLogged(self, msg):
+        for r in self.logs.records:
+            if r.msg == msg:
+                assert r.exc_info is not None
+                break
+        else:
+            assert False, "exception with message %r was not logged" % (msg,)
+
+    def assertMessageWasNotLogged(self, msg):
+        for r in self.logs.records:
+            if r.msg == msg:
+                assert False, "message %r was unexpectedly logged" % (msg,)
+
+    def assertMetricWasLogged(self, key):
+        """Check that a metric was logged during the request."""
+        for r in self.logs.records:
+            if key in r.__dict__:
+                break
+        else:
+            assert False, "metric %r was not logged" % (key,)
+
+    def clearLogs(self):
+        del self.logs.records[:]
+
+    def unsafelyParseToken(self, token):
+        # For testing purposes, don't check HMAC or anything...
+        token = token.encode("utf8")
+        return json.loads(decode_token_bytes(token)[:-32].decode("utf8"))
+
     def _gettoken(self, email='test1@example.com'):
         return email.encode('hex')
+
+
+class TestService(TestServiceTemplate):
+    def setUp(self):
+        self.config = testing.setUp()
+        settings = {}
+        load_into_settings(self.get_ini(), settings)
+        self.config.add_settings(settings)
+        self.config.include("tokenserver")
+        load_and_register("tokenserver", self.config)
+        self.backend = self.config.registry.getUtility(INodeAssignment)
+        wsgiapp = self.config.make_wsgi_app()
+        self.app = TestApp(wsgiapp)
+        # Mock out the verifier to return successfully by default.
+        self.mock_browserid_verifier_context = self.mock_browserid_verifier()
+        self.mock_browserid_verifier_context.__enter__()
+        self.mock_oauth_verifier_context = self.mock_oauth_verifier()
+        self.mock_oauth_verifier_context.__enter__()
+        self.logs = LogCapture()
 
     def test_unknown_app(self):
         headers = {'Authorization': 'BrowserID %s' % self._getassertion()}
@@ -795,6 +796,99 @@ class TestService(unittest.TestCase):
         headers = {'Authorization': 'BrowserID %s' % assertion}
         res = self.app.get('/1.0/sync/1.1', headers=headers, status=200)
         self.assertEqual(res.json['node_type'], 'example')
+
+
+class TestServiceWOXKeyId(TestServiceTemplate):
+    def setUp(self):
+        self.config = testing.setUp()
+        settings = {"tokenserver.needs_xkeyid": False}
+        load_into_settings(self.get_ini(), settings)
+        self.config.add_settings(settings)
+        self.config.include("tokenserver")
+        load_and_register("tokenserver", self.config)
+        self.backend = self.config.registry.getUtility(INodeAssignment)
+        wsgiapp = self.config.make_wsgi_app()
+        self.app = TestApp(wsgiapp)
+        # Mock out the verifier to return successfully by default.
+        self.mock_browserid_verifier_context = self.mock_browserid_verifier()
+        self.mock_browserid_verifier_context.__enter__()
+        self.mock_oauth_verifier_context = self.mock_oauth_verifier()
+        self.mock_oauth_verifier_context.__enter__()
+        self.logs = LogCapture()
+
+    def test_client_state_change(self):
+        mock_response = {
+            "email": "test@mozilla.com",
+            "idpClaims": {"fxa-generation": 1234},
+        }
+
+        # Start with no client-state header.
+        headers = {
+            "Authorization": "Bearer %s" % self._gettoken(),
+        }
+        with self.mock_oauth_verifier(response=mock_response):
+            res = self.app.get('/1.0/sync/1.1', headers=headers)
+        uid0 = res.json['uid']
+
+        # No change == same uid.
+        with self.mock_oauth_verifier(response=mock_response):
+            res = self.app.get('/1.0/sync/1.1', headers=headers)
+        self.assertEqual(res.json['uid'], uid0)
+
+        # Changing client-state header require changing generation.
+        headers['X-KeyID'] = '1234-aaaa'
+        with self.mock_oauth_verifier(response=mock_response):
+            res = self.app.get('/1.0/sync/1.1', headers=headers, status=401)
+        self.assertEqual(res.json['status'], 'invalid-client-state')
+        desc = res.json['errors'][0]['description']
+        self.assertTrue(desc.endswith('new value with no generation change'))
+
+        # Change the client-state header, get a new uid.
+        headers['X-KeyID'] = '1235-bbbb'
+        mock_response["idpClaims"]['fxa-generation'] += 1
+        with self.mock_oauth_verifier(response=mock_response):
+            res = self.app.get('/1.0/sync/1.1', headers=headers)
+        uid1 = res.json['uid']
+        self.assertNotEqual(uid1, uid0)
+
+        # No change == same uid.
+        with self.mock_oauth_verifier(response=mock_response):
+            res = self.app.get('/1.0/sync/1.1', headers=headers)
+        self.assertEqual(res.json['uid'], uid1)
+
+        # Send a client-state header, get a new uid.
+        headers['X-KeyID'] = '1236-cccc'
+        mock_response["idpClaims"]['fxa-generation'] += 1
+        with self.mock_oauth_verifier(response=mock_response):
+            res = self.app.get('/1.0/sync/1.1', headers=headers)
+        uid2 = res.json['uid']
+        self.assertNotEqual(uid2, uid0)
+        self.assertNotEqual(uid2, uid1)
+
+        # No change == same uid.
+        with self.mock_oauth_verifier(response=mock_response):
+            res = self.app.get('/1.0/sync/1.1', headers=headers)
+        self.assertEqual(res.json['uid'], uid2)
+
+        # Use a previous client-state, get an auth error.
+        headers['X-KeyID'] = '1235-bbbb'
+        with self.mock_oauth_verifier(response=mock_response):
+            res = self.app.get('/1.0/sync/1.1', headers=headers, status=401)
+        self.assertEqual(res.json['status'], 'invalid-client-state')
+        desc = res.json['errors'][0]['description']
+        self.assertTrue(desc.endswith('stale value'))
+
+        # Removing client-state returns same user.
+        del headers['X-KeyID']
+        with self.mock_oauth_verifier(response=mock_response):
+            res = self.app.get('/1.0/sync/1.1', headers=headers)
+        self.assertEqual(res.json['uid'], uid2)
+
+        # Reusing last known client-state returns same user.
+        headers['X-KeyID'] = '1236-cccc'
+        with self.mock_oauth_verifier(response=mock_response):
+            res = self.app.get('/1.0/sync/1.1', headers=headers)
+        self.assertEqual(res.json['uid'], uid2)
 
 
 class TestServiceWithSQLBackend(TestService):

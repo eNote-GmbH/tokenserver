@@ -1,4 +1,4 @@
-VIRTUALENV = virtualenv
+VIRTUALENV = virtualenv -p /usr/bin/python2
 VENV := $(shell echo $${VIRTUAL_ENV-local})
 PTYPE = pypy
 PYTHON = $(VENV)/bin/python
