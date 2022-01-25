@@ -330,11 +330,11 @@ VALIDATORS = (
 )
 
 
-def correct_client_state(client_state, user_client_state, wo_xkeyid=False):
-    if wo_xkeyid:
-        return client_state and client_state != user_client_state
-    else:
+def correct_client_state(client_state, user_client_state, w_xkeyid=True):
+    if w_xkeyid:
         return client_state != user_client_state
+    else:
+        return client_state and client_state != user_client_state
 
 
 @token.get(validators=VALIDATORS)
@@ -433,7 +433,7 @@ def return_token(request):
         if generation == 0 and keys_changed_at > user['generation']:
             updates['generation'] = keys_changed_at
         updates['keys_changed_at'] = keys_changed_at
-    if correct_client_state(client_state, user['client_state'], request.registry.settings.get('tokenserver.needs_xkeyid', False)):
+    if correct_client_state(client_state, user['client_state'], request.registry.settings.get('tokenserver.needs_xkeyid', True)):
         # Don't revert from some-client-state to no-client-state.
         if not client_state:
             raise _invalid_client_state(request, 'empty string')
