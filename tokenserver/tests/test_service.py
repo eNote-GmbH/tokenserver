@@ -31,62 +31,15 @@ from tokenlib.utils import decode_token_bytes
 here = os.path.dirname(__file__)
 
 
-class TestService(unittest.TestCase):
-
+class TestServiceTemplate(unittest.TestCase):
     def get_ini(self):
         return os.path.join(os.path.dirname(__file__),
                             'test_memorynode.ini')
-
-    def setUp(self):
-        self.config = testing.setUp()
-        settings = {}  # can be settings = {"tokenserver.needs_xkeyid": True} also, as its value is True by default
-        load_into_settings(self.get_ini(), settings)
-        self.config.add_settings(settings)
-        self.config.include("tokenserver")
-        load_and_register("tokenserver", self.config)
-        self.backend = self.config.registry.getUtility(INodeAssignment)
-        wsgiapp = self.config.make_wsgi_app()
-        self.app = TestApp(wsgiapp)
-        # Mock out the verifier to return successfully by default.
-        self.mock_browserid_verifier_context = self.mock_browserid_verifier()
-        self.mock_browserid_verifier_context.__enter__()
-        self.mock_oauth_verifier_context = self.mock_oauth_verifier()
-        self.mock_oauth_verifier_context.__enter__()
-        self.logs = LogCapture()
 
     def tearDown(self):
         self.logs.uninstall()
         self.mock_oauth_verifier_context.__exit__(None, None, None)
         self.mock_browserid_verifier_context.__exit__(None, None, None)
-
-    def assertExceptionWasLogged(self, msg):
-        for r in self.logs.records:
-            if r.msg == msg:
-                assert r.exc_info is not None
-                break
-        else:
-            assert False, "exception with message %r was not logged" % (msg,)
-
-    def assertMessageWasNotLogged(self, msg):
-        for r in self.logs.records:
-            if r.msg == msg:
-                assert False, "message %r was unexpectedly logged" % (msg,)
-
-    def assertMetricWasLogged(self, key):
-        """Check that a metric was logged during the request."""
-        for r in self.logs.records:
-            if key in r.__dict__:
-                break
-        else:
-            assert False, "metric %r was not logged" % (key,)
-
-    def clearLogs(self):
-        del self.logs.records[:]
-
-    def unsafelyParseToken(self, token):
-        # For testing purposes, don't check HMAC or anything...
-        token = token.encode("utf8")
-        return json.loads(decode_token_bytes(token)[:-32].decode("utf8"))
 
     @contextlib.contextmanager
     def mock_browserid_verifier(self, response=None, exc=None):
@@ -136,6 +89,54 @@ class TestService(unittest.TestCase):
         kw.setdefault('email', 'test1@example.com')
         kw.setdefault('audience', 'http://tokenserver.services.mozilla.com')
         return make_assertion(**kw).encode('ascii')
+
+
+class TestService(TestServiceTemplate):
+    def setUp(self):
+        self.config = testing.setUp()
+        settings = {}  # can be settings = {"tokenserver.needs_xkeyid": True} also, as its value is True by default
+        load_into_settings(self.get_ini(), settings)
+        self.config.add_settings(settings)
+        self.config.include("tokenserver")
+        load_and_register("tokenserver", self.config)
+        self.backend = self.config.registry.getUtility(INodeAssignment)
+        wsgiapp = self.config.make_wsgi_app()
+        self.app = TestApp(wsgiapp)
+        # Mock out the verifier to return successfully by default.
+        self.mock_browserid_verifier_context = self.mock_browserid_verifier()
+        self.mock_browserid_verifier_context.__enter__()
+        self.mock_oauth_verifier_context = self.mock_oauth_verifier()
+        self.mock_oauth_verifier_context.__enter__()
+        self.logs = LogCapture()
+
+    def assertExceptionWasLogged(self, msg):
+        for r in self.logs.records:
+            if r.msg == msg:
+                assert r.exc_info is not None
+                break
+        else:
+            assert False, "exception with message %r was not logged" % (msg,)
+
+    def assertMessageWasNotLogged(self, msg):
+        for r in self.logs.records:
+            if r.msg == msg:
+                assert False, "message %r was unexpectedly logged" % (msg,)
+
+    def assertMetricWasLogged(self, key):
+        """Check that a metric was logged during the request."""
+        for r in self.logs.records:
+            if key in r.__dict__:
+                break
+        else:
+            assert False, "metric %r was not logged" % (key,)
+
+    def clearLogs(self):
+        del self.logs.records[:]
+
+    def unsafelyParseToken(self, token):
+        # For testing purposes, don't check HMAC or anything...
+        token = token.encode("utf8")
+        return json.loads(decode_token_bytes(token)[:-32].decode("utf8"))
 
     def _gettoken(self, email='test1@example.com'):
         return email.encode('hex')
@@ -797,12 +798,7 @@ class TestService(unittest.TestCase):
         self.assertEqual(res.json['node_type'], 'example')
 
 
-class TestServiceWOXKeyId(unittest.TestCase):
-
-    def get_ini(self):
-        return os.path.join(os.path.dirname(__file__),
-                            'test_memorynode.ini')
-
+class TestServiceWOXKeyId(TestServiceTemplate):
     def setUp(self):
         self.config = testing.setUp()
         settings = {'tokenserver.needs_xkeyid': False}
@@ -819,92 +815,6 @@ class TestServiceWOXKeyId(unittest.TestCase):
         self.mock_oauth_verifier_context = self.mock_oauth_verifier()
         self.mock_oauth_verifier_context.__enter__()
         self.logs = LogCapture()
-
-    def tearDown(self):
-        self.logs.uninstall()
-        self.mock_oauth_verifier_context.__exit__(None, None, None)
-        self.mock_browserid_verifier_context.__exit__(None, None, None)
-
-    def assertExceptionWasLogged(self, msg):
-        for r in self.logs.records:
-            if r.msg == msg:
-                assert r.exc_info is not None
-                break
-        else:
-            assert False, "exception with message %r was not logged" % (msg,)
-
-    def assertMessageWasNotLogged(self, msg):
-        for r in self.logs.records:
-            if r.msg == msg:
-                assert False, "message %r was unexpectedly logged" % (msg,)
-
-    def assertMetricWasLogged(self, key):
-        """Check that a metric was logged during the request."""
-        for r in self.logs.records:
-            if key in r.__dict__:
-                break
-        else:
-            assert False, "metric %r was not logged" % (key,)
-
-    def clearLogs(self):
-        del self.logs.records[:]
-
-    def unsafelyParseToken(self, token):
-        # For testing purposes, don't check HMAC or anything...
-        token = token.encode("utf8")
-        return json.loads(decode_token_bytes(token)[:-32].decode("utf8"))
-
-    @contextlib.contextmanager
-    def mock_browserid_verifier(self, response=None, exc=None):
-        def mock_verify_method(assertion):
-            if exc is not None:
-                raise exc
-            if response is not None:
-                return response
-            return {
-                "status": "okay",
-                "email": get_assertion_info(assertion)["principal"]["email"],
-            }
-        verifier = get_browserid_verifier(self.config.registry)
-        orig_verify_method = verifier.__dict__.get("verify", None)
-        verifier.__dict__["verify"] = mock_verify_method
-        try:
-            yield None
-        finally:
-            if orig_verify_method is None:
-                del verifier.__dict__["verify"]
-            else:
-                verifier.__dict__["verify"] = orig_verify_method
-
-    @contextlib.contextmanager
-    def mock_oauth_verifier(self, response=None, exc=None):
-        def mock_verify_method(token):
-            if exc is not None:
-                raise exc
-            if response is not None:
-                return response
-            return {
-                "email": token.decode("hex"),
-                "idpClaims": {},
-            }
-        verifier = get_oauth_verifier(self.config.registry)
-        orig_verify_method = verifier.__dict__.get("verify", None)
-        verifier.__dict__["verify"] = mock_verify_method
-        try:
-            yield None
-        finally:
-            if orig_verify_method is None:
-                del verifier.__dict__["verify"]
-            else:
-                verifier.__dict__["verify"] = orig_verify_method
-
-    def _getassertion(self, **kw):
-        kw.setdefault('email', 'test1@example.com')
-        kw.setdefault('audience', 'http://tokenserver.services.mozilla.com')
-        return make_assertion(**kw).encode('ascii')
-
-    def _gettoken(self, email='test1@example.com'):
-        return email.encode('hex')
 
     def test_client_state_change(self):
         mock_response = {
