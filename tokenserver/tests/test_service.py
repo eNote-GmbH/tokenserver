@@ -39,7 +39,7 @@ class TestService(unittest.TestCase):
 
     def setUp(self):
         self.config = testing.setUp()
-        settings = {"tokenserver.needs_xkeyid": True}
+        settings = {}  # can be settings = {"tokenserver.needs_xkeyid": True} also, as its value is True by default
         load_into_settings(self.get_ini(), settings)
         self.config.add_settings(settings)
         self.config.include("tokenserver")
