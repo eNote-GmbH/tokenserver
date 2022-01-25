@@ -331,11 +331,10 @@ VALIDATORS = (
 
 
 def correct_client_state(client_state, user_client_state, wo_xkeyid=False):
-    current_cs_neq_user_cs = client_state != user_client_state
     if wo_xkeyid:
-        return client_state and current_cs_neq_user_cs
+        return client_state and client_state != user_client_state
     else:
-        return current_cs_neq_user_cs
+        return client_state != user_client_state
 
 
 @token.get(validators=VALIDATORS)
@@ -435,6 +434,9 @@ def return_token(request):
             updates['generation'] = keys_changed_at
         updates['keys_changed_at'] = keys_changed_at
     if correct_client_state(client_state, user['client_state']):
+        # Don't revert from some-client-state to no-client-state.
+        if not client_state:
+            raise _invalid_client_state(request, 'empty string')
         # Don't revert to a previous client-state.
         if client_state in user['old_client_states']:
             raise _invalid_client_state(request, 'stale value')
