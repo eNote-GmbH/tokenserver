@@ -433,9 +433,10 @@ def return_token(request):
         if generation == 0 and keys_changed_at > user['generation']:
             updates['generation'] = keys_changed_at
         updates['keys_changed_at'] = keys_changed_at
-    if correct_client_state(client_state, user['client_state'], request.registry.settings.get('tokenserver.needs_xkeyid', True)):
+    use_xkeyid = request.registry.settings.get('tokenserver.needs_xkeyid', True)
+    if correct_client_state(client_state, user['client_state'], use_xkeyid):
         # Don't revert from some-client-state to no-client-state.
-        if not client_state:
+        if use_xkeyid and not client_state:
             raise _invalid_client_state(request, 'empty string')
         # Don't revert to a previous client-state.
         if client_state in user['old_client_states']:
