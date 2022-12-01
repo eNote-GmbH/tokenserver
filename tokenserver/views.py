@@ -187,8 +187,8 @@ def _validate_browserid_assertion(request, assertion):
         # Convert CamelCase to under_scores for reporting.
         error_type = e.__class__.__name__
         error_type = re.sub('(?<=.)([A-Z])', r'_\1', error_type).lower()
-        request.metrics['token.assertion.verify_failure'] = 1
-        request.metrics['token.assertion.%s' % error_type] = 1
+        request.metrics['token_assertion_verify_failure'] = 1
+        request.metrics['token_assertion_%s' % error_type] = 1
         # Log a full traceback for errors that are not a simple
         # "your assertion was bad and we dont trust it".
         if not isinstance(e, browserid.errors.TrustError):
@@ -211,7 +211,7 @@ def _validate_browserid_assertion(request, assertion):
 
     # everything sounds good, add the assertion to the list of validated fields
     # and continue
-    request.metrics['token.assertion.verify_success'] = 1
+    request.metrics['token_assertion_verify_success'] = 1
     request.validated['authorization'] = assertion
 
 
@@ -224,9 +224,9 @@ def _validate_oauth_token(request, token):
         with metrics_timer('tokenserver.oauth.verify', request):
             token = verifier.verify(token)
     except (fxa.errors.Error, ConnectionError) as e:
-        request.metrics['token.oauth.verify_failure'] = 1
+        request.metrics['token_oauth_verify_failure'] = 1
         if isinstance(e, fxa.errors.InProtocolError):
-            request.metrics['token.oauth.errno.%s' % e.errno] = 1
+            request.metrics['token_oauth_errno_%s' % e.errno] = 1
         # Log a full traceback for errors that are not a simple
         # "your token was bad and we dont trust it".
         if not isinstance(e, fxa.errors.TrustError):
@@ -236,12 +236,12 @@ def _validate_oauth_token(request, token):
                 logger.exception("Unexpected verification error")
         # Report an appropriate error code.
         if isinstance(e, ConnectionError):
-            request.metrics['token.oauth.connection_error'] = 1
+            request.metrics['token_oauth_connection_error'] = 1
             raise json_error(503, description="Resource is not available")
         request.metrics['cause'] = 'invalid credentials (OAuth token)'
         raise _unauthorized("invalid-credentials")
 
-    request.metrics['token.oauth.verify_success'] = 1
+    request.metrics['token_oauth_verify_success'] = 1
     request.validated['authorization'] = token
 
     # OAuth clients should send the scoped-key kid in lieu of X-Client-State.
@@ -532,7 +532,7 @@ def return_token(request):
 
     # To help measure user retention, include the timestamp at which we
     # first saw this user as part of the logs.
-    request.metrics['uid.first_seen_at'] = user['first_seen_at']
+    request.metrics['uid_first_seen_at'] = user['first_seen_at']
 
     # To help segmented analysis of client-side metrics, we can tell
     # clients to tag their metrics with a "node type" string that is
