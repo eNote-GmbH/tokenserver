@@ -6,6 +6,8 @@ import time
 
 from pyramid.httpexceptions import HTTPException
 
+from tokenserver.metrics_context import start_metrics_context, collect_metrics
+
 
 def set_x_timestamp_header(handler, registry):
     """Tween to set the X-Timestamp header on all responses."""
@@ -23,6 +25,16 @@ def set_x_timestamp_header(handler, registry):
     return set_x_timestamp_header_tween
 
 
+def metrics_tween_factory(handler, registry):
+    def metrics_tween(request):
+        start_metrics_context()          # fresh dict for this request
+        response = handler(request)
+        request.metrics.update(collect_metrics())   # merge into existing logging path
+        return response
+    return metrics_tween
+
+
 def includeme(config):
     """Include all the TokenServer tweens into the given config."""
     config.add_tween("tokenserver.tweens.set_x_timestamp_header")
+    config.add_tween("tokenserver.tweens.metrics_tween_factory")
