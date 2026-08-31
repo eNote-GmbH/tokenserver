@@ -1,14 +1,14 @@
-import contextvars
+import threading
 
-_metrics_ctx = contextvars.ContextVar('extra_metrics', default=None)
+_local = threading.local()
 
 def start_metrics_context():
-    _metrics_ctx.set({})
+    _local.metrics = {}
 
 def record_metric(key, value):
-    d = _metrics_ctx.get()
+    d = getattr(_local, 'metrics', None)
     if d is not None:
         d[key] = value
 
 def collect_metrics():
-    return _metrics_ctx.get() or {}
+    return getattr(_local, 'metrics', None) or {}

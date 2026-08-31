@@ -1,7 +1,7 @@
-VIRTUALENV = virtualenv -p /usr/bin/python2
+VIRTUALENV = virtualenv -p /opt/pypy/bin/pypy
 VENV := $(shell echo $${VIRTUAL_ENV-local})
 PTYPE = pypy
-PYTHON = $(VENV)/bin/python
+PYTHON = $(VENV)/bin/pypy
 NOSE = $(VENV)/bin/nosetests
 DEV_STAMP = $(VENV)/.dev_env_installed.stamp
 INSTALL_STAMP = $(VENV)/.install.stamp
@@ -49,19 +49,21 @@ virtualenv: $(PYTHON)
 $(PYTHON):
 	# The latest `pip` doesn't work with pypy 2.7 on some platforms.
 	# Pin to a working version; ref https://github.com/pypa/pip/issues/8653
-	$(VIRTUALENV) -p $(PTYPE) --no-pip $(VENV)
-	$(VENV)/bin/easy_install pip==20.1.1
+	$(VIRTUALENV) -p $(PTYPE) --no-setuptools --no-pip $(VENV)
+	$(VENV)/bin/pypy -m ensurepip --upgrade
+	$(VENV)/bin/pip install "pip<21" "setuptools<45"
 
 build-requirements:
-	$(VIRTUALENV) -p $(PTYPE) --no-pip $(TEMPDIR)
-	$(TEMPDIR)/bin/easy_install pip==20.1.1
+	$(VIRTUALENV) -p $(PTYPE) --no-setuptools --no-pip $(TEMPDIR)
+	$(VENV)/bin/pypy -m ensurepip --upgrade
+	$(VENV)/bin/pip install "pip<21" "setuptools<45"
 	ARCHFLAGS=$(ARCHFLAGS) $(TEMPDIR)/bin/pip install -Ue .
 	$(TEMPDIR)/bin/pip freeze | grep -v -- '^-e' > requirements.txt
 
 tests: install-dev
 	# By default nose will skip tests in executable files, but that's annoying
 	# when working in WSL with a checkout mounted from the native filesystem.
-	$(VENV)/bin/nosetests --exe tokenserver/tests
+	$(VENV)/bin/nosetests --nocapture --exe tokenserver/tests
 
 flake8: install-dev
 	$(VENV)/bin/flake8 tokenserver
@@ -76,10 +78,3 @@ distclean: clean
 
 maintainer-clean: distclean
 	rm -fr local/ .tox/
-
-NAME := tokenserver
-SOURCE := $(shell git config remote.origin.url | sed -e 's|git@|https://|g' | sed -e 's|github.com:|github.com/|g')
-VERSION := $(shell git describe --always --tag)
-COMMIT := $(shell git log --pretty=format:'%H' -n 1)
-version-file:
-	echo '{"name":"$(NAME)","version":"$(VERSION)","source":"$(SOURCE)","commit":"$(COMMIT)"}' > version.json

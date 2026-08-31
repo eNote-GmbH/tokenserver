@@ -4,6 +4,9 @@
 # allow: never forget the license
 !LICENSE
 
+# allow: we need Makefile for testing
+!Makefile
+
 # allow: the actual module / setup code
 !tokenserver
 !setup.py

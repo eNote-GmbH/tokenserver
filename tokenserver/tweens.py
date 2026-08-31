@@ -29,12 +29,14 @@ def metrics_tween_factory(handler, registry):
     def metrics_tween(request):
         start_metrics_context()          # fresh dict for this request
         response = handler(request)
-        request.metrics.update(collect_metrics())   # merge into existing logging path
+        metrics_dict = collect_metrics()
+        for key, value in metrics_dict.items():
+            request.metrics[key] = value
         return response
     return metrics_tween
 
 
 def includeme(config):
+    #config.add_tween("tokenserver.tweens.metrics_tween_factory")
     """Include all the TokenServer tweens into the given config."""
     config.add_tween("tokenserver.tweens.set_x_timestamp_header")
-    config.add_tween("tokenserver.tweens.metrics_tween_factory")
