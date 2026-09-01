@@ -63,7 +63,7 @@ build-requirements:
 tests: install-dev
 	# By default nose will skip tests in executable files, but that's annoying
 	# when working in WSL with a checkout mounted from the native filesystem.
-	$(VENV)/bin/nosetests --nocapture --exe tokenserver/tests
+	$(VENV)/bin/nosetests -v --nocapture --exe tokenserver/tests
 
 flake8: install-dev
 	$(VENV)/bin/flake8 tokenserver

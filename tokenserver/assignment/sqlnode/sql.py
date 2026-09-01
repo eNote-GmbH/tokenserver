@@ -745,9 +745,9 @@ class SQLNodeAssignment(object):
         node = str(row.node)
 
         # let's add mmetrics regarding the slots
-        record_metric('allocation.node.available', row.available)
-        record_metric('allocation.node.current_load', row.current_load)
-        record_metric('allocation.node.capacity', row.capacity)
+        record_metric('allocation_node_available', row.available)
+        record_metric('allocation_node_current_load', row.current_load)
+        record_metric('allocation_node_capacity', row.capacity)
 
         # Update the node to reflect the new assignment.
         # This is a little racy with concurrent assignments, but no big

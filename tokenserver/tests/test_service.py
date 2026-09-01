@@ -747,6 +747,12 @@ class TestService(TestServiceTemplate):
         self.assertMetricWasLogged('uid_first_seen_at')
         self.assertMetricWasLogged('metrics_uid')
         self.assertMetricWasLogged('metrics_device_id')
+        # the following metrics are available only if SQL backend is in charge
+        if not isinstance(self, TestServiceWithSQLBackend):
+            return
+        self.assertMetricWasLogged('allocation_node_available')
+        self.assertMetricWasLogged('allocation_node_current_load')
+        self.assertMetricWasLogged('allocation_node_capacity')
 
     def test_uid_and_kid_from_browserid_assertion(self):
         assertion = self._getassertion(email="testuser@example.com")

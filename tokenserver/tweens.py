@@ -37,6 +37,6 @@ def metrics_tween_factory(handler, registry):
 
 
 def includeme(config):
-    #config.add_tween("tokenserver.tweens.metrics_tween_factory")
     """Include all the TokenServer tweens into the given config."""
     config.add_tween("tokenserver.tweens.set_x_timestamp_header")
+    config.add_tween("tokenserver.tweens.metrics_tween_factory")
