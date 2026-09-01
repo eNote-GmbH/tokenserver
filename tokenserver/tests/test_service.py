@@ -165,7 +165,7 @@ class TestService(TestServiceTemplate):
         self.assertIn('https://example.com/1.1', res.json['api_endpoint'])
         self.assertIn('duration', res.json)
         self.assertEquals(res.json['duration'], 3600)
-        self.assertMetricWasLogged('token.assertion.verify_success')
+        self.assertMetricWasLogged('token_assertion_verify_success')
         self.clearLogs()
 
     def test_unknown_pattern(self):
@@ -235,22 +235,22 @@ class TestService(TestServiceTemplate):
         with self.mock_browserid_verifier(exc=errs.AudienceMismatchError):
             res = self.app.get('/1.0/sync/1.1', headers=headers, status=401)
         self.assertEqual(res.json['status'], 'invalid-credentials')
-        self.assertMetricWasLogged('token.assertion.verify_failure')
-        self.assertMetricWasLogged('token.assertion.audience_mismatch_error')
+        self.assertMetricWasLogged('token_assertion_verify_failure')
+        self.assertMetricWasLogged('token_assertion_audience_mismatch_error')
         self.clearLogs()
         # Expired timestamp -> "invalid-timestamp"
         with self.mock_browserid_verifier(exc=errs.ExpiredSignatureError):
             res = self.app.get('/1.0/sync/1.1', headers=headers, status=401)
         self.assertEqual(res.json['status'], 'invalid-timestamp')
         self.assertTrue('X-Timestamp' in res.headers)
-        self.assertMetricWasLogged('token.assertion.verify_failure')
-        self.assertMetricWasLogged('token.assertion.expired_signature_error')
+        self.assertMetricWasLogged('token_assertion_verify_failure')
+        self.assertMetricWasLogged('token_assertion_expired_signature_error')
         self.clearLogs()
         # Connection error -> 503
         with self.mock_browserid_verifier(exc=errs.ConnectionError):
             res = self.app.get('/1.0/sync/1.1', headers=headers, status=503)
-        self.assertMetricWasLogged('token.assertion.verify_failure')
-        self.assertMetricWasLogged('token.assertion.connection_error')
+        self.assertMetricWasLogged('token_assertion_verify_failure')
+        self.assertMetricWasLogged('token_assertion_connection_error')
         self.assertExceptionWasLogged('Unexpected verification error')
         self.clearLogs()
         # Some other wacky error -> not captured
@@ -266,7 +266,7 @@ class TestService(TestServiceTemplate):
         with self.mock_oauth_verifier(exc=err):
             res = self.app.get('/1.0/sync/1.1', headers=headers, status=401)
         self.assertEqual(res.json['status'], 'invalid-credentials')
-        self.assertMetricWasLogged('token.oauth.errno.108')
+        self.assertMetricWasLogged('token_oauth_errno_108')
         self.assertMessageWasNotLogged('Unexpected verification error')
         # Untrusted scopes -> "invalid-credentials"
         err = fxa.errors.TrustError({"code": 400, "errno": 999})
@@ -277,8 +277,8 @@ class TestService(TestServiceTemplate):
         # Connection error -> 503
         with self.mock_oauth_verifier(exc=errs.ConnectionError):
             res = self.app.get('/1.0/sync/1.1', headers=headers, status=503)
-        self.assertMetricWasLogged('token.oauth.verify_failure')
-        self.assertMetricWasLogged('token.oauth.connection_error')
+        self.assertMetricWasLogged('token_oauth_verify_failure')
+        self.assertMetricWasLogged('token_oauth_connection_error')
         self.assertExceptionWasLogged('Unexpected verification error')
         self.clearLogs()
         # Some other wacky error -> not captured
@@ -744,7 +744,7 @@ class TestService(TestServiceTemplate):
         headers = {'Authorization': 'BrowserID %s' % assertion}
         self.app.get('/1.0/sync/1.1', headers=headers, status=200)
         self.assertMetricWasLogged('uid')
-        self.assertMetricWasLogged('uid.first_seen_at')
+        self.assertMetricWasLogged('uid_first_seen_at')
         self.assertMetricWasLogged('metrics_uid')
         self.assertMetricWasLogged('metrics_device_id')
 
