@@ -36,6 +36,8 @@ CMD ["make", "tests"]
 
 # ---- production stage: same base, dev tooling stripped for the shipped image ----
 FROM base AS production
+
+USER root
 RUN apt-get remove -y build-essential gcc libffi-dev libssl-dev default-libmysqlclient-dev make git && apt-get autoremove -y
 
 # run the server by default
