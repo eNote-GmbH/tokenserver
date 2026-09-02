@@ -13,6 +13,7 @@ import traceback
 import hashlib
 import time
 from mozsvc.exceptions import BackendError
+from mozsvc.metrics import annotate_request
 
 from sqlalchemy.sql import select, update, and_
 from sqlalchemy.ext.declarative import declarative_base
@@ -23,7 +24,6 @@ from sqlalchemy.exc import OperationalError, TimeoutError
 
 from zope.interface import implements
 from tokenserver.assignment import INodeAssignment
-from tokenserver.metrics_context import record_metric
 from tokenserver.util import get_timestamp
 
 
@@ -745,9 +745,9 @@ class SQLNodeAssignment(object):
         node = str(row.node)
 
         # let's add mmetrics regarding the slots
-        record_metric('allocation_node_available', row.available)
-        record_metric('allocation_node_current_load', row.current_load)
-        record_metric('allocation_node_capacity', row.capacity)
+        annotate_request(None, 'allocation_node_available', row.available)
+        annotate_request(None, 'allocation_node_current_load', row.current_load)
+        annotate_request(None, 'allocation_node_capacity', row.capacity)
 
         # Update the node to reflect the new assignment.
         # This is a little racy with concurrent assignments, but no big
