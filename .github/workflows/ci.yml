@@ -76,7 +76,7 @@ jobs:
           APP_VERSION_TAG: ${{ needs.prepare.outputs.APP_VERSION_TAG }}
           USER: ${{ github.actor }}
           PASS: ${{ secrets.GITHUB_TOKEN }}
-          REGISTRY: ${{ env.registry }}
+          REGISTRY: ${{ env.REGISTRY }}
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
           FROM_TAG: ${{ needs.prepare.outputs.APP_VERSION_TAG }}
           TAG: ${{ github.ref_name }}
