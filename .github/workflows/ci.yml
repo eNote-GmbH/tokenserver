@@ -30,7 +30,7 @@ jobs:
       - name: Set APP_VERSION_TAG
         id: version
         run: |
-          git tag --delete "$GITHUB_REF" || true
+          git tag --delete "GITHUB_REF_NAME" || true
           echo "APP_VERSION_TAG=$(git describe --always --tags HEAD)" >> $GITHUB_OUTPUT
 
   docker-build:
