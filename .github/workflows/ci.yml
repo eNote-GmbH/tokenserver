@@ -70,8 +70,9 @@ jobs:
     steps:
       - name: Retag and Push Images
         run: |
-          crane auth login -u $USER -p $PASS $REGISTRY
-          crane tag ${REGISTRY}/${IMAGE_NAME}:${FROM_TAG} ${TAG}
+          IMAGE_NAME_LC=$(echo "$IMAGE_NAME" | tr '[:upper:]' '[:lower:]')
+          crane auth login -u "$USER" -p "$PASS" "$REGISTRY"
+          crane tag "${REGISTRY}/${IMAGE_NAME_LC}:${FROM_TAG}" "${TAG}"
         env:
           APP_VERSION_TAG: ${{ needs.prepare.outputs.APP_VERSION_TAG }}
           USER: ${{ github.actor }}
